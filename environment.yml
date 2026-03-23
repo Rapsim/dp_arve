@@ -1,0 +1,19 @@
+name: arve-flow
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pandas
+  - numpy
+  - scipy
+  - scikit-learn
+  - xarray
+  - dask
+  - distributed
+  - pyarrow
+  - fastparquet
+  - matplotlib
+  - seaborn
+  - numba
+  - xskillscore
+  - netcdf4

@@ -1,0 +1,29 @@
+# Ignore large data and common virtualenv/build files
+/data/
+# keep an optional placeholder if you want an empty folder tracked
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtualenv
+.venv/
+env/
+venv/
+
+# Conda
+environment.lock.yml
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Parquet / netCDF / large binary data
+*.parquet
+*.nc
+*.h5
+
+# OS files
+.DS_Store
+Thumbs.db
