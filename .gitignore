@@ -2,6 +2,7 @@
 /data/
 # keep an optional placeholder if you want an empty folder tracked
 !data/.gitkeep
+/refs/
 
 # Python
 __pycache__/
