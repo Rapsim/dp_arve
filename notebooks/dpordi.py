@@ -49,6 +49,18 @@ def peak_timing(obs, sim, index):
 def volume_error(obs, sim):
     return (np.sum(sim)-np.sum(obs))/np.sum(obs)*100
 
+def rmse(obs, sim):
+    return np.sqrt(np.mean((obs - sim)**2))
+
+def relative_volume_error(obs, sim):
+    return (np.sum(sim) - np.sum(obs)) / np.sum(obs) * 100
+
+def mape_high_flows(obs, sim, thr):
+    mask = obs > thr
+    if np.sum(mask) == 0:
+        return np.nan
+    return 100 * np.mean(np.abs((obs[mask] - sim[mask]) / obs[mask]))
+
 # ============================================================
 # EVENT DETECTION
 # ============================================================
@@ -306,13 +318,21 @@ for LT in LEAD_TIMES:
         sim_v = df.iloc[:,1].values
 
         all_metrics.append({
-            "lead_time":LT,
-            "model":name,
-            "NSE":nse(obs_v,sim_v),
-            "KGE":kge(obs_v,sim_v),
-            "Peak_%":peak_error(obs_v,sim_v),
-            "Timing_h":peak_timing(obs_v,sim_v,df.index),
-            "Volume_%":volume_error(obs_v,sim_v)
+            "lead_time": LT,
+            "model": name,
+
+            # global metrics
+            "NSE": nse(obs_v, sim_v),
+            "KGE": kge(obs_v, sim_v),
+            "RMSE": rmse(obs_v, sim_v),
+
+            # flood-focused metrics
+            "REQ_%": peak_error(obs_v, sim_v),
+            "TP_h": peak_timing(obs_v, sim_v, df.index),
+            "RER_%": relative_volume_error(obs_v, sim_v),
+
+            # high-flow metric
+            "MAPE_high_%": mape_high_flows(obs_v, sim_v, FLOOD_THR)
         })
 
         plt.figure(figsize=(5,5))

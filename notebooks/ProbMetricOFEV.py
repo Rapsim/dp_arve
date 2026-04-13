@@ -180,8 +180,20 @@ for LT in LEAD_TIMES:
         ranks.append(rank)
 
     plt.figure(figsize=(6,4))
-    plt.hist(ranks, bins=20)
-    plt.title(f"Rank histogram LT {LT}")
+
+    max_rank = max(ranks)
+
+    plt.hist(ranks, bins=np.arange(0, max_rank+2), edgecolor='black')
+
+    plt.xlim(0, max_rank)
+
+    plt.xlabel("Rank")
+    plt.ylabel("Frequency")
+
+    plt.title(f"Rank Histogram - Lead Time {LT} h - OFEV Model")
+
+    plt.margins(x=0)  # pas d'espace gauche/droite
+
     plt.savefig(out_lt/"rank_histogram.png")
     plt.close()
 
@@ -209,13 +221,18 @@ for LT in LEAD_TIMES:
 
     plt.figure(figsize=(5,5))
 
-    plt.plot([0,1],[0,1],'k--')
+    plt.plot([0,1],[0,1],'k--', label="Perfect reliability")
     plt.plot(rel_prob, rel_obs,"o-")
 
     plt.xlabel("Forecast probability")
     plt.ylabel("Observed frequency")
 
-    plt.title(f"Reliability LT {LT}")
+    plt.title(f"Reliability Diagram - Lead Time {LT} h - OFEV Model")
+
+    plt.xlim(0,1)
+    plt.ylim(0,1)
+
+    plt.margins(0)
 
     plt.savefig(out_lt/"reliability.png")
     plt.close()
@@ -225,16 +242,22 @@ for LT in LEAD_TIMES:
     # ======================================================
 
     plt.figure(figsize=(5,5))
-    plt.scatter(spread_list, skill_list, alpha=0.3)
+
+    plt.scatter(spread_list, skill_list, s=10)
 
     m = max(max(spread_list), max(skill_list))
 
     plt.plot([0,m],[0,m],'k--')
 
-    plt.xlabel("Spread")
-    plt.ylabel("Skill")
+    plt.xlabel("Spread (ensemble std)")
+    plt.ylabel("Skill (|median - obs|)")
 
-    plt.title(f"Spread Skill LT {LT}")
+    plt.title(f"Spread-Skill - Lead Time {LT} h - OFEV Model")
+
+    plt.xlim(0, m)
+    plt.ylim(0, m)
+
+    plt.margins(0)
 
     plt.savefig(out_lt/"spread_skill.png")
     plt.close()
