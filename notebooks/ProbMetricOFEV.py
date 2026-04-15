@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 plt.style.use("seaborn-v0_8-whitegrid")
-
+#ENLEVER NORAIN
 # ============================================================
 # PATHS
 # ============================================================
@@ -45,6 +45,7 @@ ofev = pd.read_csv(ofev_path)
 
 ofev["forecast_date"] = pd.to_datetime(ofev["forecast_date"])
 ofev["datetime"] = pd.to_datetime(ofev["datetime"])
+#ofev = ofev[ofev["model"] != "NORAIN"]
 
 ofev["discharge_m3s"] = (
     ofev["discharge_m3s"]

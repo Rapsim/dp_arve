@@ -38,28 +38,29 @@ def kge(obs, sim):
     beta = np.mean(sim)/np.mean(obs)
     return 1 - np.sqrt((r-1)**2 + (alpha-1)**2 + (beta-1)**2)
 
-def peak_error(obs, sim):
-    return (np.max(sim)-np.max(obs))/np.max(obs)*100
-
-def peak_timing(obs, sim, index):
-    t_obs = index[np.argmax(obs)]
-    t_sim = index[np.argmax(sim)]
-    return (t_sim - t_obs).total_seconds()/3600
-
-def volume_error(obs, sim):
-    return (np.sum(sim)-np.sum(obs))/np.sum(obs)*100
-
 def rmse(obs, sim):
     return np.sqrt(np.mean((obs - sim)**2))
-
-def relative_volume_error(obs, sim):
-    return (np.sum(sim) - np.sum(obs)) / np.sum(obs) * 100
 
 def mape_high_flows(obs, sim, thr):
     mask = obs > thr
     if np.sum(mask) == 0:
         return np.nan
     return 100 * np.mean(np.abs((obs[mask] - sim[mask]) / obs[mask]))
+
+# ============================================================
+# EVENT METRICS (CORRIGÉ)
+# ============================================================
+
+def peak_error_event(obs, sim):
+    return (np.max(sim) - np.max(obs)) / np.max(obs) * 100
+
+def peak_timing_event(obs, sim, index):
+    t_obs = index[np.argmax(obs)]
+    t_sim = index[np.argmax(sim)]
+    return (t_sim - t_obs).total_seconds() / 3600
+
+def volume_error_event(obs, sim):
+    return (np.sum(sim) - np.sum(obs)) / np.sum(obs) * 100
 
 # ============================================================
 # EVENT DETECTION
@@ -91,89 +92,47 @@ obs = obs.set_index("Zeitstempel")
 obs_h = obs.resample("1h").mean()
 
 # ============================================================
-# LOAD ML
+# LOAD ML / HYD / CNR / OFEV (IDENTIQUE)
 # ============================================================
 
-with open(ml_path) as f:
-    data = json.load(f)
+def load_json_model(path, colname):
+    with open(path) as f:
+        data = json.load(f)
 
-records = []
-for ftime, ts in data["ForecastFirstDate2Timeseries"].items():
-    for vtime, q in ts.items():
-        records.append([ftime, vtime, q])
+    records = []
+    for ftime, ts in data["ForecastFirstDate2Timeseries"].items():
+        for vtime, q in ts.items():
+            records.append([ftime, vtime, q])
 
-ml = pd.DataFrame(records, columns=["forecast_time","valid_time","Q_ml"])
-ml["forecast_time"] = pd.to_datetime(ml["forecast_time"])
-ml["valid_time"] = pd.to_datetime(ml["valid_time"])
-ml["lead_time_h"] = (ml["valid_time"]-ml["forecast_time"]).dt.total_seconds()/3600
-ml = ml.set_index("valid_time")
+    df = pd.DataFrame(records, columns=["forecast_time","valid_time",colname])
+    df["forecast_time"] = pd.to_datetime(df["forecast_time"])
+    df["valid_time"] = pd.to_datetime(df["valid_time"])
+    df["lead_time_h"] = (df["valid_time"]-df["forecast_time"]).dt.total_seconds()/3600
 
-# ============================================================
-# LOAD HYD
-# ============================================================
+    return df.set_index("valid_time")
 
-with open(hyd_path) as f:
-    data = json.load(f)
-
-records = []
-for ftime, ts in data["ForecastFirstDate2Timeseries"].items():
-    for vtime, q in ts.items():
-        records.append([ftime, vtime, q])
-
-hyd = pd.DataFrame(records, columns=["forecast_time","valid_time","Q_hyd"])
-hyd["forecast_time"] = pd.to_datetime(hyd["forecast_time"])
-hyd["valid_time"] = pd.to_datetime(hyd["valid_time"])
-hyd["lead_time_h"] = (hyd["valid_time"]-hyd["forecast_time"]).dt.total_seconds()/3600
-hyd = hyd.set_index("valid_time")
-
-# ============================================================
-# LOAD CNR
-# ============================================================
+ml = load_json_model(ml_path, "Q_ml")
+hyd = load_json_model(hyd_path, "Q_hyd")
 
 cnr = pd.read_csv(cnr_path)
-
 cnr["DateTime_PREV"] = pd.to_datetime(cnr["DateTime_PREV"])
 cnr["Date_Prevision"] = pd.to_datetime(cnr["Date_Prevision"])
-
 cnr = cnr.rename(columns={"Q":"Q_cnr"})
-
-cnr["lead_time_h"] = (
-    cnr["Date_Prevision"] - cnr["DateTime_PREV"]
-).dt.total_seconds()/3600
-
+cnr["lead_time_h"] = (cnr["Date_Prevision"] - cnr["DateTime_PREV"]).dt.total_seconds()/3600
 cnr["valid_time"] = cnr["Date_Prevision"]
 cnr = cnr.set_index("valid_time")
 
-# ============================================================
-# LOAD OFEV
-# ============================================================
-
 ofev = pd.read_csv(ofev_path)
 ofev.columns = ofev.columns.str.strip()
-
 ofev["forecast_date"] = pd.to_datetime(ofev["forecast_date"])
 ofev["datetime"] = pd.to_datetime(ofev["datetime"])
-
-ofev["discharge_m3s"] = (
-    ofev["discharge_m3s"]
-    .astype(str)
-    .str.replace(",",".")
-    .astype(float)
-)
-
-ofev["lead_time_h"] = (
-    ofev["datetime"] - ofev["forecast_date"]
-).dt.total_seconds()/3600
-
-ofev = ofev.rename(columns={
-    "datetime":"valid_time",
-    "discharge_m3s":"Q_ofev"
-})
-
+ofev["discharge_m3s"] = ofev["discharge_m3s"].astype(str).str.replace(",",".").astype(float)
+ofev["lead_time_h"] = (ofev["datetime"] - ofev["forecast_date"]).dt.total_seconds()/3600
+ofev = ofev.rename(columns={"datetime":"valid_time","discharge_m3s":"Q_ofev"})
 ofev = ofev.set_index("valid_time")
 
 # ============================================================
-# LOOP LEAD TIMES
+# LOOP
 # ============================================================
 
 all_metrics = []
@@ -182,19 +141,16 @@ for LT in LEAD_TIMES:
 
     print(f"\n========== LT {LT}h ==========")
 
-    out_lt = output_dir / f"leadtime_{LT}h"
-    out_lt.mkdir(exist_ok=True)
-
     ml_lt = ml[np.round(ml["lead_time_h"])==LT][["Q_ml"]]
     hyd_lt = hyd[np.round(hyd["lead_time_h"])==LT][["Q_hyd"]]
     cnr_lt = cnr[np.round(cnr["lead_time_h"])==LT][["Q_cnr"]]
-    ofev_lt = ofev[np.round(ofev["lead_time_h"])==LT][["Q_ofev"]]
-
-    ofev_lt = ofev_lt.groupby(ofev_lt.index).median()
-
-    # ============================================================
-    # PERIODE COMMUNE
-    # ============================================================
+    
+    # filtre NORAIN
+    ofev = ofev[ofev["model"] != "NORAIN"]  
+    # sélection lead time
+    ofev_lt = ofev[np.round(ofev["lead_time_h"])==LT]
+    # médiane propre
+    ofev_lt = ofev_lt.groupby(ofev_lt.index)["Q_ofev"].median().to_frame()
 
     series = [s for s in [ml_lt, hyd_lt, cnr_lt, ofev_lt] if len(s)>0]
 
@@ -208,97 +164,7 @@ for LT in LEAD_TIMES:
     ofev_plot = ofev_lt.loc[start_common:end_common]
 
     # ============================================================
-    # TIMESERIES COMPLETE
-    # ============================================================
-
-    plt.figure(figsize=(16,6))
-
-    plt.plot(obs_plot.index, obs_plot["Q_obs"], color="black", label="Observed")
-    plt.plot(ml_plot.index, ml_plot["Q_ml"], label="Hydrique ML")
-    plt.plot(hyd_plot.index, hyd_plot["Q_hyd"], label="Hydrique Curve")
-    plt.plot(cnr_plot.index, cnr_plot["Q_cnr"], label="SIG-CNR")
-    plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="OFEV")
-
-    plt.xlim(start_common, end_common)
-
-    plt.legend()
-    plt.title(f"Timeseries LT {LT}h")
-    plt.tight_layout()
-    plt.savefig(out_lt / f"timeseries_LT{LT}.png", dpi=200)
-    plt.close()
-
-    
-    # ============================================================
-    # FLOOD EVENTS TIMESERIES
-    # ============================================================
-
-    events = get_flood_events(obs_plot["Q_obs"], FLOOD_THR)
-
-    for i,(start,end) in enumerate(events):
-
-        # fenêtre ±3 jours
-        start_win = start - pd.Timedelta(days=3)
-        end_win   = end + pd.Timedelta(days=3)
-
-        fig, ax = plt.subplots(figsize=(16,6))
-
-        # plots
-        ax.plot(obs_plot.loc[start_win:end_win].index,
-                obs_plot.loc[start_win:end_win,"Q_obs"],
-                color="black", label="Observed")
-
-        if len(ml_plot)>0:
-            ax.plot(ml_plot.loc[start_win:end_win].index,
-                    ml_plot.loc[start_win:end_win,"Q_ml"],
-                    label="Hydrique ML")
-
-        if len(hyd_plot)>0:
-            ax.plot(hyd_plot.loc[start_win:end_win].index,
-                    hyd_plot.loc[start_win:end_win,"Q_hyd"],
-                    label="Hydrique Curve")
-
-        if len(cnr_plot)>0:
-            ax.plot(cnr_plot.loc[start_win:end_win].index,
-                    cnr_plot.loc[start_win:end_win,"Q_cnr"],
-                    label="SIG-CNR")
-
-        if len(ofev_plot)>0:
-            ax.plot(ofev_plot.loc[start_win:end_win].index,
-                    ofev_plot.loc[start_win:end_win,"Q_ofev"],
-                    label="OFEV")
-
-        # limites strictes
-        ax.set_xlim(start_win, end_win)
-
-        # titre avec debut/fin du plot
-        title = (
-            f"Flood {start_win.strftime('%d/%m')} - "
-            f"{end_win.strftime('%d/%m %Y')}"
-        )
-
-        ax.set_title(title)
-
-        # format axe temps
-        ax.xaxis.set_major_formatter(
-            plt.matplotlib.dates.DateFormatter('%d/%m\n%H:%M')
-        )
-
-        ax.legend()
-        plt.tight_layout()
-
-        # nom fichier avec dates
-        fname = (
-            f"flood_"
-            f"{start_win.strftime('%Y%m%d')}_"
-            f"{end_win.strftime('%Y%m%d')}_"
-            f"LT{LT}.png"
-        )
-
-        plt.savefig(out_lt / fname, dpi=200)
-        plt.close()
-
-    # ============================================================
-    # METRICS + SCATTER
+    # METRICS
     # ============================================================
 
     for name,model in [
@@ -317,41 +183,55 @@ for LT in LEAD_TIMES:
         obs_v = df["Q_obs"].values
         sim_v = df.iloc[:,1].values
 
+        # ================= EVENT-BASED =================
+
+        events = get_flood_events(df["Q_obs"], FLOOD_THR)
+
+        req_list, tp_list, rer_list = [], [], []
+
+        for start, end in events:
+
+            # fenêtre élargie (CRUCIAL)
+            start_win = start - pd.Timedelta(days=2)
+            end_win   = end + pd.Timedelta(days=2)
+
+            df_event = df.loc[start_win:end_win]
+
+            if len(df_event) < 5:
+                continue
+
+            obs_e = df_event["Q_obs"].values
+            sim_e = df_event.iloc[:,1].values
+            idx_e = df_event.index
+
+            # ignorer si pas de crue simulée
+            if np.max(sim_e) < FLOOD_THR:
+                continue
+
+            req_list.append(peak_error_event(obs_e, sim_e))
+            tp_list.append(peak_timing_event(obs_e, sim_e, idx_e))
+            rer_list.append(volume_error_event(obs_e, sim_e))
+
+        REQ = np.median(req_list) if len(req_list)>0 else np.nan
+        TP  = np.median(tp_list) if len(tp_list)>0 else np.nan
+        RER = np.median(rer_list) if len(rer_list)>0 else np.nan
+
+        # ================= SAVE =================
+
         all_metrics.append({
             "lead_time": LT,
             "model": name,
-
-            # global metrics
             "NSE": nse(obs_v, sim_v),
             "KGE": kge(obs_v, sim_v),
             "RMSE": rmse(obs_v, sim_v),
-
-            # flood-focused metrics
-            "REQ_%": peak_error(obs_v, sim_v),
-            "TP_h": peak_timing(obs_v, sim_v, df.index),
-            "RER_%": relative_volume_error(obs_v, sim_v),
-
-            # high-flow metric
+            "REQ_%": REQ,
+            "TP_h": TP,
+            "RER_%": RER,
             "MAPE_high_%": mape_high_flows(obs_v, sim_v, FLOOD_THR)
         })
 
-        plt.figure(figsize=(5,5))
-
-        plt.scatter(obs_v,sim_v,s=5,alpha=0.3)
-
-        m=max(obs_v.max(),sim_v.max())
-        plt.plot([0,m],[0,m],"k--")
-
-        plt.xlabel("Observed")
-        plt.ylabel(name)
-        plt.title(f"{name} LT{LT}")
-
-        plt.tight_layout()
-        plt.savefig(out_lt / f"scatter_{name}_LT{LT}.png", dpi=200)
-        plt.close()
-
 # ============================================================
-# SAVE METRICS
+# SAVE
 # ============================================================
 
 metrics = pd.DataFrame(all_metrics)
