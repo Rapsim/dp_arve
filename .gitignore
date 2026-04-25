@@ -16,6 +16,8 @@ venv/
 
 # Conda
 environment.lock.yml
+.conda/
+*.conda
 
 # Notebook checkpoints
 .ipynb_checkpoints/
