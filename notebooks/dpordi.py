@@ -156,8 +156,8 @@ def plot_confusion_matrix(TP, FP, FN, model, label, output_dir):
     ax.set_xticklabels(["No Flood","Flood"])
     ax.set_yticklabels(["No Flood","Flood"])
 
-    ax.set_xlabel("Observed")
-    ax.set_ylabel("Predicted")
+    ax.set_ylabel("Observed")
+    ax.set_xlabel("Predicted")
 
     ax.set_title(f"{model} - {label} h")
 
