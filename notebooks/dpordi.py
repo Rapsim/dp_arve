@@ -17,7 +17,7 @@ obs_path = DATA_DIR / 'ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv
 ml_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique ML Arve-Bout du Monde.json'
 hyd_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique hydrique-curve Arve-Bout du Monde.json'
 cnr_path = DATA_DIR / 'SIG-CNR_model/Previsions_CNR_20_25.csv'
-ofev_path = DATA_DIR / 'forecasts_OFEV_models.csv'
+ofev_path = BASE_DIR / 'outputs/OFEV_probabilistic/station2170_q_quantiles_by_model.csv'
 
 output_dir = BASE_DIR / "outputs"
 output_dir.mkdir(parents=True, exist_ok=True)
@@ -150,7 +150,8 @@ def plot_confusion_matrix(TP, FP, FN, model, label, output_dir):
         for j in range(2):
             txt = "NA" if (i==0 and j==0) else f"{cm[i,j]}\n({cm_norm[i,j]:.2f})"
             ax.text(j, i, txt, ha="center", va="center")
-
+    
+    ax.grid(False)
     ax.set_xticks([0,1])
     ax.set_yticks([0,1])
     ax.set_xticklabels(["No Flood","Flood"])
@@ -279,25 +280,28 @@ cnr = cnr.set_index("valid_time")
 ofev = pd.read_csv(ofev_path)
 ofev.columns = ofev.columns.str.strip()
 
-ofev["forecast_date"] = pd.to_datetime(ofev["forecast_date"])
-ofev["datetime"] = pd.to_datetime(ofev["datetime"])
+# bonnes colonnes maintenant
+ofev["issue_time"] = pd.to_datetime(ofev["issue_time"])
+ofev["valid_time"] = pd.to_datetime(ofev["valid_time"])
 
-ofev["discharge_m3s"] = (
-    ofev["discharge_m3s"]
-    .astype(str)
-    .str.replace(",",".")
-    .astype(float)
+# lead time déjà présent normalement → sinon sécurité
+if "lead_time_h" not in ofev.columns:
+    ofev["lead_time_h"] = (
+        ofev["valid_time"] - ofev["issue_time"]
+    ).dt.total_seconds()/3600
+
+
+# MÉDIANE DES MÉDIANES 
+
+ofev = (
+    ofev
+    .groupby(["valid_time", "lead_time_h"])["Q_p50"]
+    .median()
+    .reset_index()
 )
 
-ofev["lead_time_h"] = (
-    ofev["datetime"] - ofev["forecast_date"]
-).dt.total_seconds()/3600
-
-ofev = ofev.rename(columns={
-    "datetime":"valid_time",
-    "discharge_m3s":"Q_ofev"
-})
-
+# format final comme les autres modèles
+ofev = ofev.rename(columns={"Q_p50": "Q_ofev"})
 ofev = ofev.set_index("valid_time")
 
 # ============================================================
@@ -324,7 +328,7 @@ for LT in LEAD_TIMES:
     cnr_lt = cnr[np.round(cnr["lead_time_h"])==LT][["Q_cnr"]]
     ofev_lt = ofev[np.round(ofev["lead_time_h"])==LT][["Q_ofev"]]
 
-    ofev_lt = ofev_lt.groupby(ofev_lt.index).median()
+    
 
     # ============================================================
     # PERIODE COMMUNE
