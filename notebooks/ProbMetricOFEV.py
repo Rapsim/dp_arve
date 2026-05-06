@@ -10,6 +10,7 @@ import seaborn as sns
 
 plt.style.use("seaborn-v0_8-whitegrid")
 
+#Mets ensemble wide
 # ============================================================
 # PATHS
 # ============================================================
@@ -18,13 +19,13 @@ BASE_DIR = Path("..").resolve() / "dp_arve"
 DATA_DIR = BASE_DIR / "data/Data Fornisseurs"
 
 obs_path = DATA_DIR / "ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv"
-ofev_path = DATA_DIR / "forecasts_OFEV_models.csv"
+ofev_path = BASE_DIR / "outputs/OFEV_probabilistic/station2170_ensemble_wide.csv"
 
 output_dir = BASE_DIR / "outputs/OFEV_probabilistic"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 LEAD_TIMES = [6, 12, 24, 36, 48]
-HIGH_FLOW = 80
+HIGH_FLOW = 400
 
 # ============================================================
 # OBSERVATIONS
@@ -47,15 +48,16 @@ obs_h = obs.resample("1h").mean()
 
 ofev = pd.read_csv(ofev_path)
 
-ofev["forecast_date"] = pd.to_datetime(ofev["forecast_date"])
-ofev["datetime"] = pd.to_datetime(ofev["datetime"])
+ofev["issue_time"] = pd.to_datetime(ofev["issue_time"])
+ofev["valid_time"] = pd.to_datetime(ofev["valid_time"])
 
-ofev["discharge_m3s"] = (
-    ofev["discharge_m3s"]
-    .astype(str)
-    .str.replace(",", ".")
-    .astype(float)
-)
+# Colonnes ensemble débit
+ens_cols = [c for c in ofev.columns if c.startswith("Q_e")]
+
+# sécurité : conversion float
+ofev[ens_cols] = ofev[ens_cols].apply(pd.to_numeric, errors="coerce")
+
+ofev = ofev.drop_duplicates(subset=["model", "valid_time", "lead_time_h"] + ens_cols)
 
 # ============================================================
 # METRICS FUNCTIONS
@@ -105,12 +107,6 @@ for LT in LEAD_TIMES:
 
     ofev_lt = ofev[np.round(ofev["lead_time_h"]) == LT]
 
-    grouped_all = ofev_lt.groupby("datetime")
-
-    # ========================================================
-    # GLOBAL METRICS
-    # ========================================================
-
     crps_list = []
     spread_list = []
     skill_list = []
@@ -118,12 +114,19 @@ for LT in LEAD_TIMES:
     median_list = []
     prob_list = []
 
-    for t, g in grouped_all:
+    for _, row in ofev_lt.iterrows():
+
+        t = row["valid_time"]
 
         if t not in obs_h.index:
             continue
 
-        ens = g["discharge_m3s"].values
+        ens = row[ens_cols].to_numpy(dtype=float)
+        ens = ens[~np.isnan(ens)]
+
+        if len(ens) == 0:
+            continue
+
         obs_val = obs_h.loc[t, "Q_obs"]
 
         if np.isnan(obs_val):
@@ -133,14 +136,19 @@ for LT in LEAD_TIMES:
         spread_list.append(np.std(ens))
 
         med = np.median(ens)
-        median_list.append(med)
         obs_list.append(obs_val)
 
         skill_list.append(abs(med - obs_val))
         prob_list.append(np.mean(ens > HIGH_FLOW))
 
+    # ========================================================
+    # GLOBAL METRICS
+    # ========================================================
+
     obs_list = np.array(obs_list)
     prob_list = np.array(prob_list)
+
+    obs_bin = obs_list > HIGH_FLOW
 
     crps = np.mean(crps_list)
     spread = np.mean(spread_list)
@@ -148,10 +156,8 @@ for LT in LEAD_TIMES:
 
     spread_skill = spread / (skill + 1e-9)
 
-    clim = np.mean(np.abs(obs_h["Q_obs"] - obs_h["Q_obs"].mean()))
+    clim = np.mean(np.abs(obs_list - np.mean(obs_list)))
     crpss = 1 - crps / clim
-
-    obs_bin = obs_list > HIGH_FLOW
 
     brier = np.mean((prob_list - obs_bin) ** 2)
 
@@ -174,12 +180,20 @@ for LT in LEAD_TIMES:
 
     ranks = []
 
-    for t, g in grouped_all:
+    for _, row in ofev_lt.iterrows():
+
+        t = row["valid_time"]
 
         if t not in obs_h.index:
             continue
 
-        ens = np.sort(g["discharge_m3s"].values)
+        ens = row[ens_cols].to_numpy(dtype=float)
+        ens = ens[~np.isnan(ens)]
+
+        if len(ens) == 0:
+            continue
+
+        ens = np.sort(ens)
         obs_val = obs_h.loc[t, "Q_obs"]
 
         ranks.append(np.searchsorted(ens, obs_val))
@@ -202,6 +216,9 @@ for LT in LEAD_TIMES:
     # ========================================================
     # RELIABILITY
     # ========================================================
+    obs_list = np.array(obs_list)
+    prob_list = np.array(prob_list)
+
 
     bins = np.linspace(0, 1, 11)
     bin_centers = (bins[:-1] + bins[1:]) / 2
@@ -269,17 +286,21 @@ for LT in LEAD_TIMES:
 
     for model, df_model in ofev_lt.groupby("model"):
 
-        grouped = df_model.groupby("datetime")
-
         crps_m, spread_m, skill_m = [], [], []
-        obs_m, median_m = [], []
 
-        for t, g in grouped:
+        for _, row in df_model.iterrows():
+
+            t = row["valid_time"]
 
             if t not in obs_h.index:
                 continue
 
-            ens = g["discharge_m3s"].values
+            ens = row[ens_cols].to_numpy(dtype=float)
+            ens = ens[~np.isnan(ens)]
+
+            if len(ens) == 0:
+                continue
+
             obs_val = obs_h.loc[t, "Q_obs"]
 
             if np.isnan(obs_val):
@@ -290,9 +311,6 @@ for LT in LEAD_TIMES:
 
             med = np.median(ens)
             skill_m.append(abs(med - obs_val))
-
-            obs_m.append(obs_val)
-            median_m.append(med)
 
         if len(crps_m) == 0:
             continue
