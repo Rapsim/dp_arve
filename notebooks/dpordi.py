@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
+from sklearn.metrics import r2_score
 
 plt.style.use('seaborn-v0_8-whitegrid')
 
@@ -349,7 +350,7 @@ for LT in LEAD_TIMES:
     # TIMESERIES COMPLETE
     # ============================================================
 
-    plt.figure(figsize=(16,6))
+    plt.figure(figsize=(17,6))
 
     plt.plot(obs_plot.index, obs_plot["Q_obs"], color="black", label="Observed")
     plt.plot(ml_plot.index, ml_plot["Q_ml"], label="Hydrique ML")
@@ -358,9 +359,10 @@ for LT in LEAD_TIMES:
     plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="OFEV")
 
     plt.xlim(start_common, end_common)
-
+    plt.ylim(0,1000)
     plt.legend()
-    plt.title(f"Timeseries LT {LT}h")
+    plt.ylabel("Discharge [m3/s]")
+    plt.title(f"Timeseries, lead time {LT}h")
     plt.tight_layout()
     plt.savefig(out_lt / f"timeseries_LT{LT}.png", dpi=200)
     plt.close()
@@ -374,7 +376,7 @@ for LT in LEAD_TIMES:
 
     for i,(start,end) in enumerate(events):
 
-        # fenêtre ±3 jours
+        # fenêtre ±2 jours
         start_win = start - pd.Timedelta(days=2)
         end_win   = end + pd.Timedelta(days=2)
 
@@ -393,7 +395,7 @@ for LT in LEAD_TIMES:
         if len(hyd_plot)>0:
             ax.plot(hyd_plot.loc[start_win:end_win].index,
                     hyd_plot.loc[start_win:end_win,"Q_hyd"],
-                    label="Hydrique Curve")
+                    label="Hydrique physique")
 
         if len(cnr_plot)>0:
             ax.plot(cnr_plot.loc[start_win:end_win].index,
@@ -406,8 +408,8 @@ for LT in LEAD_TIMES:
                     label="OFEV")
 
         # limites strictes
-        ax.set_xlim(start_win, end_win)
-
+        ax.set_xlim(start_win +pd.Timedelta(hours=8), end_win - pd.Timedelta(hours=8))
+        
         # titre avec debut/fin du plot
         title = (
             f"Flood {start_win.strftime('%d/%m')} - "
@@ -422,8 +424,8 @@ for LT in LEAD_TIMES:
         )
 
         ax.legend()
-        plt.tight_layout()
-
+        
+        plt.ylabel("Discharge [m3/s]")
         # nom fichier avec dates
         fname = (
             f"flood_"
@@ -431,7 +433,7 @@ for LT in LEAD_TIMES:
             f"{end_win.strftime('%Y%m%d')}_"
             f"LT{LT}.png"
         )
-
+        plt.tight_layout()
         plt.savefig(out_lt / fname, dpi=200)
         plt.close()
 
@@ -536,21 +538,42 @@ for LT in LEAD_TIMES:
             "RER_high_%": relative_volume_error(obs_hf, sim_hf) if obs_hf is not None else np.nan
                     })
 
+        pobs_v = df["Q_obs"].values
+        sim_v = df.iloc[:,1].values
+
+        # enlever NaN (important pour R²)
+        mask = ~np.isnan(obs_v) & ~np.isnan(sim_v)
+        obs_v_clean = obs_v[mask]
+        sim_v_clean = sim_v[mask]
+
+        r2 = r2_score(obs_v_clean, sim_v_clean)
+
         plt.figure(figsize=(5,5))
 
-        plt.scatter(obs_v,sim_v,s=5,alpha=0.3)
+        plt.scatter(obs_v_clean, sim_v_clean, s=5, alpha=0.3)
 
-        m=max(obs_v.max(),sim_v.max())
-        plt.plot([0,m],[0,m],"k--")
+        m = max(obs_v_clean.max(), sim_v_clean.max())
+        plt.plot([0, m], [0, m], "k--")
 
+        plt.xlim(0, 1000)
+        plt.ylim(0, 1000)
         plt.xlabel("Observed")
         plt.ylabel(name)
-        plt.title(f"{name} LT{LT}")
+
+        plt.title(f"{name} model, lead time {LT}h")
+
+        # R² affiché sur le graphe
+        plt.text(
+            0.05, 0.95,
+            f"$R^2$ = {r2:.3f}",
+            transform=plt.gca().transAxes,
+            verticalalignment='top',
+            bbox=dict(boxstyle="round", facecolor="white", alpha=0.7)
+        )
 
         plt.tight_layout()
         plt.savefig(out_lt / f"scatter_{name}_LT{LT}.png", dpi=200)
         plt.close()
-
 
 for model, vals in event_totals.items():
     TP, FP, FN = vals

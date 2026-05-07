@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 plt.style.use('seaborn-v0_8-whitegrid')
+#ajout de matrice de confusion
 
 # ============================================================
 # PATHS
@@ -17,7 +18,7 @@ obs_path = DATA_DIR / 'ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv
 ml_path  = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique ML Arve-Bout du Monde.json'
 hyd_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique hydrique-curve Arve-Bout du Monde.json'
 cnr_path = DATA_DIR / 'SIG-CNR_model/Previsions_CNR_20_25.csv'
-ofev_path = DATA_DIR / 'forecasts_OFEV_models.csv'
+ofev_path = BASE_DIR / 'outputs/ofev_median_of_medians.csv'
 
 output_dir = BASE_DIR / "outputs"/"peak_windows"
 output_dir.mkdir(parents=True, exist_ok=True)
@@ -116,17 +117,19 @@ def extract_peaks(model_df, obs_df, start_lt, end_lt, col_name):
         sub["lt"] = (sub["valid_time"] - ftime).dt.total_seconds()/3600
 
         window = sub[(sub["lt"] >= start_lt) & (sub["lt"] < end_lt)]
+        
 
         if len(window) < 3:
             continue
-
+        
         # alignement robuste
-        df_merge = pd.merge(
-            window[["valid_time", col_name]],
-            obs_df.reset_index(),
+        df_merge = pd.merge_asof(
+            window.sort_values("valid_time"),
+            obs_df.reset_index().sort_values("Zeitstempel"),
             left_on="valid_time",
             right_on="Zeitstempel",
-            how="inner"
+            direction="nearest",
+            tolerance=pd.Timedelta("30min")
         )
 
         if len(df_merge) < 3:
@@ -153,7 +156,13 @@ def extract_peaks(model_df, obs_df, start_lt, end_lt, col_name):
             "timing_error": timing_error
         })
 
-    return pd.DataFrame(results)
+    print("MODEL:", col_name)
+    print("WINDOW:", start_lt, end_lt)
+    print("rows after merge:", len(df_merge))
+    print("window size:", len(window))
+    print("obs size:", len(obs_df))
+
+    return pd.DataFrame(results, columns=["sim_peak", "obs_peak", "timing_error"])
 
 # ============================================================
 # LOAD OBS
@@ -169,6 +178,12 @@ obs = obs[["Zeitstempel","Wert"]].rename(columns={"Wert":"Q_obs"})
 obs = obs.set_index("Zeitstempel")
 
 obs_h = obs.resample("1h").mean()
+
+print("RAW MAX:", obs.index.max())
+print("RAW MIN:", obs.index.min())
+
+print("NaN count:", obs["Q_obs"].isna().sum())
+print("Total rows:", len(obs))
 
 # ============================================================
 # LOAD ML & HYD
@@ -212,23 +227,19 @@ cnr = cnr[["forecast_time","valid_time","Q_cnr"]]
 # ============================================================
 # LOAD OFEV
 # ============================================================
-
 ofev = pd.read_csv(ofev_path)
 ofev.columns = ofev.columns.str.strip()
 
-ofev["forecast_time"] = pd.to_datetime(ofev["forecast_date"])
-ofev["valid_time"] = pd.to_datetime(ofev["datetime"])
+print(ofev.columns)
+print(ofev.head())
+# Convertir directement les colonnes existantes (déjà renommées dans le fichier)
+ofev["forecast_time"] = pd.to_datetime(ofev["forecast_time"])
+ofev["valid_time"] = pd.to_datetime(ofev["valid_time"])
 
-ofev["Q_ofev"] = (
-    ofev["discharge_m3s"]
-    .astype(str)
-    .str.replace(",",".")
-    .astype(float)
-)
+# Pas besoin de recalculer Q_ofev, car le fichier contient déjà la médiane des médianes
+ofev = ofev[["forecast_time", "valid_time", "Q_ofev"]]
 
-ofev = ofev[["forecast_time","valid_time","Q_ofev"]]
-
-START_DATE = "2020-01-01"
+START_DATE = "2020-06-11"
 
 obs_h = obs_h.loc[START_DATE:]
 
