@@ -30,3 +30,6 @@ environment.lock.yml
 # OS files
 .DS_Store
 Thumbs.db
+
+.conda/
+conda/
