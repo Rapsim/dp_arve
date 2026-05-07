@@ -18,7 +18,7 @@ obs_path = DATA_DIR / 'ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv
 ml_path  = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique ML Arve-Bout du Monde.json'
 hyd_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique hydrique-curve Arve-Bout du Monde.json'
 cnr_path = DATA_DIR / 'SIG-CNR_model/Previsions_CNR_20_25.csv'
-ofev_path = BASE_DIR / 'outputs/ofev_median_of_medians.csv'
+ofev_path = BASE_DIR / 'outputs/OFEV_probabilistic/station2170_det_median_lt0_48.csv'
 
 output_dir = BASE_DIR / "outputs"/"peak_windows"
 output_dir.mkdir(parents=True, exist_ok=True)
@@ -114,10 +114,18 @@ def extract_peaks(model_df, obs_df, start_lt, end_lt, col_name):
 
         sub = model_df[model_df["forecast_time"] == ftime].copy()
 
-        sub["lt"] = (sub["valid_time"] - ftime).dt.total_seconds()/3600
+        # OFEV possède déjà lead_time_h
+        if "lead_time_h" in sub.columns:
+            sub["lt"] = sub["lead_time_h"]
+        else:
+            sub["lt"] = (
+                sub["valid_time"] - ftime
+            ).dt.total_seconds()/3600
 
-        window = sub[(sub["lt"] >= start_lt) & (sub["lt"] < end_lt)]
-        
+        window = sub[
+            (sub["lt"] >= start_lt) &
+            (sub["lt"] < end_lt)
+]
 
         if len(window) < 3:
             continue
@@ -225,28 +233,32 @@ cnr["valid_time"] = cnr["Date_Prevision"]
 cnr = cnr[["forecast_time","valid_time","Q_cnr"]]
 
 # ============================================================
-# LOAD OFEV
+# LOAD OFEV 
 # ============================================================
+
 ofev = pd.read_csv(ofev_path)
 ofev.columns = ofev.columns.str.strip()
 
 print(ofev.columns)
 print(ofev.head())
-# Convertir directement les colonnes existantes (déjà renommées dans le fichier)
-ofev["forecast_time"] = pd.to_datetime(ofev["forecast_time"])
+
+# conversion dates
+ofev["issue_time"] = pd.to_datetime(ofev["issue_time"])
 ofev["valid_time"] = pd.to_datetime(ofev["valid_time"])
 
-# Pas besoin de recalculer Q_ofev, car le fichier contient déjà la médiane des médianes
-ofev = ofev[["forecast_time", "valid_time", "Q_ofev"]]
+# renommage homogène avec le reste du pipeline
+ofev = ofev.rename(columns={
+    "issue_time": "forecast_time",
+    "Q_median": "Q_ofev"
+})
 
-START_DATE = "2020-06-11"
-
-obs_h = obs_h.loc[START_DATE:]
-
-ml  = ml[ml["valid_time"] >= START_DATE]
-hyd = hyd[hyd["valid_time"] >= START_DATE]
-cnr = cnr[cnr["valid_time"] >= START_DATE]
-ofev = ofev[ofev["valid_time"] >= START_DATE]
+# garder uniquement les colonnes utiles
+ofev = ofev[[
+    "forecast_time",
+    "valid_time",
+    "lead_time_h",
+    "Q_ofev"
+]]
 # ============================================================
 # MAIN LOOP
 # ============================================================
@@ -298,9 +310,12 @@ def filter_window(df_model, col, start_lt, end_lt):
 
     df = df_model.copy()
 
-    df["lead_time"] = (
-        df["valid_time"] - df["forecast_time"]
-    ).dt.total_seconds()/3600
+    if "lead_time_h" in df.columns:
+        df["lead_time"] = df["lead_time_h"]
+    else:
+        df["lead_time"] = (
+            df["valid_time"] - df["forecast_time"]
+        ).dt.total_seconds()/3600
 
     df = df[
         (df["lead_time"] >= start_lt) &
