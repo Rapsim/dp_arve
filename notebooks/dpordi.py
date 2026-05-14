@@ -150,7 +150,22 @@ def plot_confusion_matrix(TP, FP, FN, model, label, output_dir):
     for i in range(2):
         for j in range(2):
             txt = "NA" if (i==0 and j==0) else f"{cm[i,j]}\n({cm_norm[i,j]:.2f})"
-            ax.text(j, i, txt, ha="center", va="center")
+            ax.text(
+                j,
+                i,
+                txt,
+                ha="center",
+                va="center",
+                fontsize=12,
+                fontweight="bold",
+                color="black",
+                bbox=dict(
+                    facecolor="white",
+                    edgecolor="white",
+                    boxstyle="round,pad=0.3",
+                    alpha=0.9
+                )
+            )
     
     ax.grid(False)
     ax.set_xticks([0,1])
@@ -312,7 +327,7 @@ ofev = ofev.set_index("valid_time")
 all_metrics = []
 event_totals = {
     "Hydrique_ML": np.array([0,0,0]),
-    "Hydrique_Curve": np.array([0,0,0]),
+    "Hydrique_physique": np.array([0,0,0]),
     "SIG_CNR": np.array([0,0,0]),
     "OFEV": np.array([0,0,0])
 }
@@ -354,7 +369,7 @@ for LT in LEAD_TIMES:
 
     plt.plot(obs_plot.index, obs_plot["Q_obs"], color="black", label="Observed")
     plt.plot(ml_plot.index, ml_plot["Q_ml"], label="Hydrique ML")
-    plt.plot(hyd_plot.index, hyd_plot["Q_hyd"], label="Hydrique Curve")
+    plt.plot(hyd_plot.index, hyd_plot["Q_hyd"], label="Hydrique physique")
     plt.plot(cnr_plot.index, cnr_plot["Q_cnr"], label="SIG-CNR")
     plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="OFEV")
 
@@ -443,7 +458,7 @@ for LT in LEAD_TIMES:
 
     for name,model in [
         ("Hydrique_ML",ml_plot),
-        ("Hydrique_Curve",hyd_plot),
+        ("Hydrique_physique",hyd_plot),
         ("SIG_CNR",cnr_plot),
         ("OFEV",ofev_plot)
     ]:

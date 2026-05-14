@@ -18,13 +18,16 @@ obs_path = DATA_DIR / 'ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv
 ml_path  = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique ML Arve-Bout du Monde.json'
 hyd_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique hydrique-curve Arve-Bout du Monde.json'
 cnr_path = DATA_DIR / 'SIG-CNR_model/Previsions_CNR_20_25.csv'
-ofev_path = BASE_DIR / 'outputs/ofev_median_of_medians.csv'
+ofev_path = BASE_DIR / 'outputs/OFEV_probabilistic/station2170_det_median_lt0_48.csv'
 
 output_dir = BASE_DIR / "outputs"/"peak_windows"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 out_floods = output_dir / "flood_timeseries"
 out_floods.mkdir(exist_ok=True)
+
+out_matrice = output_dir / "confusion_matrix"
+out_matrice.mkdir(exist_ok=True)
 
 # ============================================================
 # SETTINGS
@@ -73,7 +76,7 @@ def compute_peak_metrics(df):
         "NSE_peak": nse(obs, sim),
         "KGE_peak": kge(obs, sim)
     }
-
+    
 # ============================================================
 # EVENT DETECTION (pour plots uniquement)
 # ============================================================
@@ -103,6 +106,117 @@ def get_flood_events(series, thr, gap_hours=12):
     return merged
 
 # ============================================================
+# EVENT CONFUSION MATRIX
+# ============================================================
+
+def event_confusion_matrix(df, thr):
+
+    obs_flood = df["Q_obs"] >= thr
+    sim_flood = df["Q_sim"] >= thr
+
+    TP = np.sum(obs_flood & sim_flood)
+
+    FP = np.sum(~obs_flood & sim_flood)
+
+    FN = np.sum(obs_flood & ~sim_flood)
+
+    return TP, FP, FN
+
+
+# ============================================================
+# PLOT CONFUSION MATRIX
+# ============================================================
+
+def plot_confusion_matrix(TP, FP, FN, model, label, output_dir):
+
+    # TN non défini ici → on met 0
+    cm = np.array([
+        [0, FP],
+        [FN, TP]
+    ])
+
+    total = TP + FP + FN
+
+    cm_norm = cm / total if total > 0 else cm
+
+    fig, ax = plt.subplots(figsize=(4.5,4.5))
+
+    im = ax.imshow(
+        cm_norm,
+        cmap="Blues",
+        vmin=0,
+        vmax=1
+    )
+
+    labels = [
+        ["TN (NA)", "FP"],
+        ["FN", "TP"]
+    ]
+
+    for i in range(2):
+        for j in range(2):
+
+            if i == 0 and j == 0:
+                txt = "NA"
+            else:
+                txt = f"{labels[i][j]}\n{cm[i,j]}\n({cm_norm[i,j]:.2f})"
+
+            ax.text(
+                j,
+                i,
+                txt,
+                ha="center",
+                va="center",
+                fontsize=12,
+                fontweight="bold",
+                color="black",
+                bbox=dict(
+                    facecolor="white",
+                    edgecolor="white",
+                    boxstyle="round,pad=0.3",
+                    alpha=0.9
+                )
+            )
+
+    ax.grid(False)
+
+    ax.set_xticks([0,1])
+    ax.set_yticks([0,1])
+
+    ax.set_xticklabels(["No Flood", "Flood"])
+    ax.set_yticklabels(["No Flood", "Flood"])
+
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Observed")
+
+    ax.set_title(f"{model} | LT {label}")
+
+    plt.colorbar(im, ax=ax, shrink=0.75)
+
+    plt.tight_layout()
+
+    plt.savefig(
+        output_dir / f"CM_{model}_{label}.png",
+        dpi=300
+    )
+
+    plt.close()
+
+# ============================================================
+# EVENT SCORES
+# ============================================================
+
+def event_scores(TP, FP, FN):
+
+    POD = TP / (TP + FN) if (TP + FN) > 0 else np.nan
+
+    FAR = FP / (TP + FP) if (TP + FP) > 0 else np.nan
+
+    CSI = TP / (TP + FP + FN) if (TP + FP + FN) > 0 else np.nan
+
+    return POD, FAR, CSI
+
+# ============================================================
 # PEAK EXTRACTION
 # ============================================================
 
@@ -114,10 +228,18 @@ def extract_peaks(model_df, obs_df, start_lt, end_lt, col_name):
 
         sub = model_df[model_df["forecast_time"] == ftime].copy()
 
-        sub["lt"] = (sub["valid_time"] - ftime).dt.total_seconds()/3600
+        # OFEV possède déjà lead_time_h
+        if "lead_time_h" in sub.columns:
+            sub["lt"] = sub["lead_time_h"]
+        else:
+            sub["lt"] = (
+                sub["valid_time"] - ftime
+            ).dt.total_seconds()/3600
 
-        window = sub[(sub["lt"] >= start_lt) & (sub["lt"] < end_lt)]
-        
+        window = sub[
+            (sub["lt"] >= start_lt) &
+            (sub["lt"] < end_lt)
+]
 
         if len(window) < 3:
             continue
@@ -225,28 +347,32 @@ cnr["valid_time"] = cnr["Date_Prevision"]
 cnr = cnr[["forecast_time","valid_time","Q_cnr"]]
 
 # ============================================================
-# LOAD OFEV
+# LOAD OFEV 
 # ============================================================
+
 ofev = pd.read_csv(ofev_path)
 ofev.columns = ofev.columns.str.strip()
 
 print(ofev.columns)
 print(ofev.head())
-# Convertir directement les colonnes existantes (déjà renommées dans le fichier)
-ofev["forecast_time"] = pd.to_datetime(ofev["forecast_time"])
+
+# conversion dates
+ofev["issue_time"] = pd.to_datetime(ofev["issue_time"])
 ofev["valid_time"] = pd.to_datetime(ofev["valid_time"])
 
-# Pas besoin de recalculer Q_ofev, car le fichier contient déjà la médiane des médianes
-ofev = ofev[["forecast_time", "valid_time", "Q_ofev"]]
+# renommage homogène avec le reste du pipeline
+ofev = ofev.rename(columns={
+    "issue_time": "forecast_time",
+    "Q_median": "Q_ofev"
+})
 
-START_DATE = "2020-06-11"
-
-obs_h = obs_h.loc[START_DATE:]
-
-ml  = ml[ml["valid_time"] >= START_DATE]
-hyd = hyd[hyd["valid_time"] >= START_DATE]
-cnr = cnr[cnr["valid_time"] >= START_DATE]
-ofev = ofev[ofev["valid_time"] >= START_DATE]
+# garder uniquement les colonnes utiles
+ofev = ofev[[
+    "forecast_time",
+    "valid_time",
+    "lead_time_h",
+    "Q_ofev"
+]]
 # ============================================================
 # MAIN LOOP
 # ============================================================
@@ -255,7 +381,7 @@ all_results = []
 
 models = [
     ("Hydrique_ML", ml, "Q_ml"),
-    ("Hydrique_Curve", hyd, "Q_hyd"),
+    ("Hydrique_physique", hyd, "Q_hyd"),
     ("SIG_CNR", cnr, "Q_cnr"),
     ("OFEV", ofev, "Q_ofev")
 ]
@@ -269,9 +395,54 @@ for (lt_start, lt_end) in LEAD_WINDOWS:
         peaks = extract_peaks(df_model, obs_h, lt_start, lt_end, col)
 
         # filtre crues
+        # métriques continues uniquement sur les vraies crues
         peaks_flood = peaks[peaks["obs_peak"] > FLOOD_THR]
 
         metrics = compute_peak_metrics(peaks_flood)
+
+       # ============================================================
+        # EVENT CONFUSION MATRIX
+        # ============================================================
+
+        # dataframe événementiel
+        df_events = peaks[
+            (peaks["obs_peak"] > FLOOD_THR) |
+            (peaks["sim_peak"] > FLOOD_THR)
+        ].copy()
+
+        df_events["Q_obs"] = df_events["obs_peak"]
+        df_events["Q_sim"] = df_events["sim_peak"]
+
+        TP, FP, FN = event_confusion_matrix(
+            df_events[["Q_obs", "Q_sim"]],
+            FLOOD_THR
+        )
+
+        POD, FAR, CSI = event_scores(
+            TP,
+            FP,
+            FN
+        )
+
+        # plot matrice
+        plot_confusion_matrix(
+            TP,
+            FP,
+            FN,
+            name,
+            f"{lt_start}_{lt_end}",
+            out_matrice
+        )
+
+        metrics.update({
+            "TP": TP,
+            "FP": FP,
+            "FN": FN,
+            "POD": POD,
+            "FAR": FAR,
+            "CSI": CSI
+        })
+        
 
         metrics.update({
             "model": name,
@@ -281,6 +452,8 @@ for (lt_start, lt_end) in LEAD_WINDOWS:
 
         all_results.append(metrics)
 
+        
+        
 # ============================================================
 # SAVE METRICS
 # ============================================================
@@ -298,9 +471,12 @@ def filter_window(df_model, col, start_lt, end_lt):
 
     df = df_model.copy()
 
-    df["lead_time"] = (
-        df["valid_time"] - df["forecast_time"]
-    ).dt.total_seconds()/3600
+    if "lead_time_h" in df.columns:
+        df["lead_time"] = df["lead_time_h"]
+    else:
+        df["lead_time"] = (
+            df["valid_time"] - df["forecast_time"]
+        ).dt.total_seconds()/3600
 
     df = df[
         (df["lead_time"] >= start_lt) &
