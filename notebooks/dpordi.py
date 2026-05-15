@@ -572,10 +572,10 @@ for LT in LEAD_TIMES:
 
         plt.xlim(0, 1000)
         plt.ylim(0, 1000)
-        plt.xlabel("Observed")
-        plt.ylabel(name)
+        plt.xlabel("Discharge observed [m3/s]")
+        plt.ylabel("Discharge predicted [m3/s]")
 
-        plt.title(f"{name} model, lead time {LT}h")
+        plt.title(f"Scatterplot of {name} model, lead time {LT}h")
 
         # R² affiché sur le graphe
         plt.text(
