@@ -8,7 +8,7 @@ conda env create -f environment.yml
 conda activate arve-flow
 ```
 
-## 2) If you add packages
+## 2) To add packages
 
 Install with conda:
 
@@ -22,7 +22,7 @@ If the package is only available on pip:
 pip install <package>
 ```
 
-If you installed with pip, add these entries by hand in `environment.yml` (under `dependencies`):
+If installed with pip, add these entries by hand in `environment.yml` (under `dependencies`):
 
 ```yaml
   - pip
