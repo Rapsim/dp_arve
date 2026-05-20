@@ -68,17 +68,6 @@ def mape_high_flows(obs, sim, thr):
 # ============================================================
 # EVENT DETECTION
 # ============================================================
-"""
-def get_flood_events(series, thr):
-    mask = series > thr
-    groups = (mask != mask.shift()).cumsum()
-    events = []
-
-    for _, g in series[mask].groupby(groups):
-        events.append((g.index.min(), g.index.max()))
-
-    return events
-"""
 def get_flood_events(series, thr, gap_hours=12):
 
     mask = series > thr
@@ -329,7 +318,7 @@ event_totals = {
     "Hydrique_ML": np.array([0,0,0]),
     "Hydrique_physique": np.array([0,0,0]),
     "SIG_CNR": np.array([0,0,0]),
-    "OFEV": np.array([0,0,0])
+    "FOEN": np.array([0,0,0])
 }
 
 for LT in LEAD_TIMES:
@@ -371,7 +360,7 @@ for LT in LEAD_TIMES:
     plt.plot(ml_plot.index, ml_plot["Q_ml"], label="Hydrique ML")
     plt.plot(hyd_plot.index, hyd_plot["Q_hyd"], label="Hydrique physique")
     plt.plot(cnr_plot.index, cnr_plot["Q_cnr"], label="SIG-CNR")
-    plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="OFEV")
+    plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="FOEN")
 
     plt.xlim(start_common, end_common)
     plt.ylim(0,1000)
@@ -420,7 +409,7 @@ for LT in LEAD_TIMES:
         if len(ofev_plot)>0:
             ax.plot(ofev_plot.loc[start_win:end_win].index,
                     ofev_plot.loc[start_win:end_win,"Q_ofev"],
-                    label="OFEV")
+                    label="FOEN")
 
         # limites strictes
         ax.set_xlim(start_win +pd.Timedelta(hours=8), end_win - pd.Timedelta(hours=8))
@@ -460,7 +449,7 @@ for LT in LEAD_TIMES:
         ("Hydrique_ML",ml_plot),
         ("Hydrique_physique",hyd_plot),
         ("SIG_CNR",cnr_plot),
-        ("OFEV",ofev_plot)
+        ("FOEN",ofev_plot)
     ]:
 
         df = pd.merge(obs_plot, model, left_index=True,

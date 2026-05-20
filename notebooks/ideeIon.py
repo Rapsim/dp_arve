@@ -396,7 +396,7 @@ models = [
     ("Hydrique_ML", ml, "Q_ml"),
     ("Hydrique_physique", hyd, "Q_hyd"),
     ("SIG_CNR", cnr, "Q_cnr"),
-    ("OFEV", ofev, "Q_ofev")
+    ("FOEN", ofev, "Q_ofev")
 ]
 
 for (lt_start, lt_end) in LEAD_WINDOWS:
