@@ -300,6 +300,8 @@ obs = obs[["Zeitstempel","Wert"]].rename(columns={"Wert":"Q_obs"})
 obs = obs.set_index("Zeitstempel")
 
 obs_h = obs.resample("1h").mean()
+START_DATE = "2020-05-01"
+obs_h = obs_h.loc[START_DATE:]
 
 print("RAW MAX:", obs.index.max())
 print("RAW MIN:", obs.index.min())
@@ -376,6 +378,17 @@ ofev = ofev[[
 # ============================================================
 # MAIN LOOP
 # ============================================================
+for df in [ml, hyd, cnr, ofev]:
+
+    df.drop(
+        df[df["valid_time"] < pd.Timestamp(START_DATE)].index,
+        inplace=True
+    )
+
+    df.drop(
+        df[df["forecast_time"] < pd.Timestamp(START_DATE)].index,
+        inplace=True
+    )
 
 all_results = []
 
