@@ -10,7 +10,6 @@ import seaborn as sns
 
 plt.style.use("seaborn-v0_8-whitegrid")
 
-#Mets ensemble wide
 # ============================================================
 # PATHS
 # ============================================================
