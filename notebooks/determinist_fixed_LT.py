@@ -12,6 +12,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 # ============================================================
 
 BASE_DIR = Path('..').resolve() / 'dp_arve'
+BASE_DIR = Path('..').resolve() / 'analysis' #uncomment the right path
 DATA_DIR = BASE_DIR / 'data/Data Fornisseurs'
 
 obs_path = DATA_DIR / 'ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv'
@@ -20,7 +21,7 @@ hyd_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique hydrique-curv
 cnr_path = DATA_DIR / 'SIG-CNR_model/Previsions_CNR_20_25.csv'
 ofev_path = BASE_DIR / 'outputs/OFEV_probabilistic/station2170_q_quantiles_by_model.csv'
 
-output_dir = BASE_DIR / "outputs"
+output_dir = BASE_DIR / "outputs" / "Q75"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 out_matrice = output_dir / "Confusion Matrix"
@@ -300,13 +301,13 @@ if "lead_time_h" not in ofev.columns:
 
 ofev = (
     ofev
-    .groupby(["valid_time", "lead_time_h"])["Q_p50"]
+    .groupby(["valid_time", "lead_time_h"])["Q_p75"]
     .median()
     .reset_index()
 )
 
 # format final comme les autres modèles
-ofev = ofev.rename(columns={"Q_p50": "Q_ofev"})
+ofev = ofev.rename(columns={"Q_p75": "Q_ofev"})
 ofev = ofev.set_index("valid_time")
 
 # ============================================================
