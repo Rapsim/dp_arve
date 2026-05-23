@@ -15,12 +15,13 @@ plt.style.use("seaborn-v0_8-whitegrid")
 # ============================================================
 
 BASE_DIR = Path("..").resolve() / "dp_arve"
+BASE_DIR = Path("..").resolve() / "analysis" # uncomment right path
 DATA_DIR = BASE_DIR / "data/Data Fornisseurs"
 
 obs_path = DATA_DIR / "ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv"
-ofev_path = BASE_DIR / "outputs/OFEV_probabilistic/station2170_ensemble_wide.csv"
+ofev_path = BASE_DIR / "outputs/OFEV_probabilistic/station2170_ensemble_wide_inflated_f1.20.csv" #choose between original or inflated
 
-output_dir = BASE_DIR / "outputs/OFEV_probabilistic"
+output_dir = BASE_DIR / "outputs/OFEV_probabilistic/inflated"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 LEAD_TIMES = [6, 12, 24, 36, 48]
