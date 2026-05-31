@@ -47,7 +47,7 @@ LEAD_WINDOWS = [
 ]
 
 LEAD_WINDOWS = [
-    (0,24)
+    (36,48)
 ]
 
 # ============================================================
@@ -550,6 +550,9 @@ for i, (start, end) in enumerate(events):
             f"Flood {start.strftime('%Y-%m-%d')} | "
             f"LT window {lt_start}-{lt_end}h"
         )
+
+        plt.xlabel("Date [days]")
+        plt.ylabel("Discharge [m³/s]")
 
         plt.xlim(start_win, end_win)
         plt.legend()
