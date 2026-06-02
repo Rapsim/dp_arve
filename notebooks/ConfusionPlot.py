@@ -16,7 +16,9 @@ plt.style.use("seaborn-v0_8-whitegrid")
 # PATHS
 # ============================================================
 
-BASE_DIR = Path("..").resolve() / "dp_arve"
+BASE_DIR = Path("..").resolve() / "dp_arve" # uncomment the right line
+
+BASE_DIR = Path("..").resolve() / "analysis"
 
 DATA_DIR = BASE_DIR / "data/Data Fornisseurs"
 
@@ -364,7 +366,7 @@ def plot_scatter_confusion(
     # ============================================================
 
     text_style = dict(
-        fontsize=13,
+        fontsize=16,
         fontweight="bold",
         bbox=dict(
             facecolor="white",
@@ -426,7 +428,7 @@ def plot_scatter_confusion(
         ha="center",
         va="center",
         color="gray",
-        fontsize=11
+        fontsize=16
     )
 
     # ============================================================
@@ -454,13 +456,14 @@ def plot_scatter_confusion(
 
     ax.set_ylim(0, lim)
 
-    ax.set_xlabel("Simulated discharge [m³/s]")
+    ax.set_xlabel("Simulated discharge [m³/s]", fontsize=16)
 
-    ax.set_ylabel("Observed discharge [m³/s]")
+    ax.set_ylabel("Observed discharge [m³/s]", fontsize=16)
 
     ax.set_title(
-        f"{model_name} — Threshold = {threshold} m³/s\n"
-        f"Forecasts between 0h and 48h"
+        f"{model_name}, threshold = {threshold} m³/s\n"
+        f"Forecasts between 0h and 48h",
+            fontsize=18
     )
 
     plt.tight_layout()

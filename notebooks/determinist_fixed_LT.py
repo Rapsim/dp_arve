@@ -21,7 +21,7 @@ hyd_path = DATA_DIR / 'Hydrique_model/Archive prévisions Hydrique hydrique-curv
 cnr_path = DATA_DIR / 'SIG-CNR_model/Previsions_CNR_20_25.csv'
 ofev_path = BASE_DIR / 'outputs/OFEV_probabilistic/station2170_q_quantiles_by_model.csv'
 
-output_dir = BASE_DIR / "outputs" / "Q75"
+output_dir = BASE_DIR / "outputs"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 out_matrice = output_dir / "Confusion Matrix"
@@ -301,13 +301,13 @@ if "lead_time_h" not in ofev.columns:
 
 ofev = (
     ofev
-    .groupby(["valid_time", "lead_time_h"])["Q_p75"]
+    .groupby(["valid_time", "lead_time_h"])["Q_p50"]
     .median()
     .reset_index()
 )
 
 # format final comme les autres modèles
-ofev = ofev.rename(columns={"Q_p75": "Q_ofev"})
+ofev = ofev.rename(columns={"Q_p50": "Q_ofev"})
 ofev = ofev.set_index("valid_time")
 
 # ============================================================
@@ -361,13 +361,14 @@ for LT in LEAD_TIMES:
     plt.plot(ml_plot.index, ml_plot["Q_ml"], label="Hydrique ML")
     plt.plot(hyd_plot.index, hyd_plot["Q_hyd"], label="Hydrique physique")
     plt.plot(cnr_plot.index, cnr_plot["Q_cnr"], label="SIG-CNR")
-    plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="FOEN")
+    plt.plot(ofev_plot.index, ofev_plot["Q_ofev"], label="FOEN Q50")
 
     plt.xlim(start_common, end_common)
-    plt.ylim(0,1000)
-    plt.legend()
-    plt.ylabel("Discharge [m3/s]")
-    plt.title(f"Timeseries, lead time {LT}h")
+    plt.ylim(0,1100)
+    plt.tick_params(axis="both", which="major", labelsize=14)
+    plt.legend(frameon=True, fontsize=16)
+    plt.ylabel("Discharge [m3/s]", fontsize=18)
+    plt.title(f"Time series, lead time {LT}h", fontsize=20)
     plt.tight_layout()
     plt.savefig(out_lt / f"timeseries_LT{LT}.png", dpi=200)
     plt.close()
