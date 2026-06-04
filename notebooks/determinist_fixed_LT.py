@@ -12,7 +12,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 # ============================================================
 
 BASE_DIR = Path('..').resolve() / 'dp_arve'
-BASE_DIR = Path('..').resolve() / 'analysis' #uncomment the right path
+# BASE_DIR = Path('..').resolve() / 'analysis' #uncomment the right path
 DATA_DIR = BASE_DIR / 'data/Data Fornisseurs'
 
 obs_path = DATA_DIR / 'ARVE/2170_Abfluss_10-Min-Mittel_1999-01-01_2024-12-31.csv'
